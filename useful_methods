@@ -1,0 +1,73 @@
+ def test_create_file(self):
+        bucket_name = 'gs-data-esperanto.appspot.com'
+        prefix = 'input_batch_prediction/'
+
+        storage_client = storage.Client.from_service_account_json(config.SENTIMENT.AUTOML.KEY_PATH)
+        self.upload_blob(bucket_name, storage_client,'H:/testAuto.csv', 'test.csv')
+
+        # bucket = storage_client.get_bucket(bucket_or_name=bucket_name)
+        # blob=bucket.blob(prefix+'test1.txt')
+        # blob.upload_from_string("abcd",content_type='text/plain')
+
+
+    def delete_files(self):
+        pass
+
+    def test_get_data_from_cloud(self):
+        bucket_name = 'gs-data-esperanto.appspot.com'
+        prefix = 'engagement_dataset/export_data-engagement_drivers-2020-11-05T17:52:25.055Z/files/'
+        dl_dir = 'H:/exported'
+
+        storage_client = storage.Client.from_service_account_json(config.SENTIMENT.AUTOML.KEY_PATH)
+
+        bucket = storage_client.get_bucket(bucket_or_name=bucket_name)
+        blobs = bucket.list_blobs(prefix=prefix)  # Get list of files
+        # blobs = bucket.list_blobs()  # Get list of files
+        for blob in blobs:
+            file_path=blob.name
+            filename=file_path.split('/')[-1]
+            # filename = blob.name.replace('/', '_')
+            # print(filename)
+            blob.download_to_filename(os.path.join(dl_dir,filename))  # Download
+
+    def upload_blob(self,bucket_name, storage_client,source_file_name, destination_blob_name):
+        """Uploads a file to the bucket. https://cloud.google.com/storage/docs/ """
+        bucket = storage_client.get_bucket(bucket_name)
+        blob = bucket.blob(destination_blob_name)
+        blob.upload_from_filename(source_file_name)
+        print('File {} uploaded to {}.'.format(
+            source_file_name,
+            destination_blob_name))
+    def test_batch_prediction(self):
+
+        # TODO(developer): Uncomment and set the following variables
+        project_id = config.SENTIMENT.AUTOML.PROJECT_ID
+        model_id = config.SENTIMENT.AUTOML.MODEL_ID
+        # input_uri = "gs://YOUR_BUCKET_ID/path/to/your/input/csv_or_jsonl"
+        # output_uri = "gs://YOUR_BUCKET_ID/path/to/save/results/"
+        input_uri = "gs://gs-data-esperanto.appspot.com/input_batch_prediction"
+        output_uri = "gs://gs-data-esperanto.appspot.com/output_batch_prediction"
+        credentials = service_account.Credentials.from_service_account_file(filename=config.SENTIMENT.AUTOML.KEY_PATH)
+        prediction_client = automl.PredictionServiceClient(credentials=credentials)
+
+        # Get the full path of the model.
+        model_full_id = f"projects/{project_id}/locations/us-central1/models/{model_id}"
+
+        gcs_source = automl.GcsSource(input_uris=[input_uri])
+
+        input_config = automl.BatchPredictInputConfig(gcs_source=gcs_source)
+        gcs_destination = automl.GcsDestination(output_uri_prefix=output_uri)
+        output_config = automl.BatchPredictOutputConfig(
+            gcs_destination=gcs_destination
+        )
+
+        response = prediction_client.batch_predict(
+            name=model_full_id,
+            input_config=input_config,
+            output_config=output_config
+        )
+
+        print("Waiting for operation to complete...")
+        print(
+            f"Batch Prediction results saved to Cloud Storage bucket. {response.result()}"
+        )
